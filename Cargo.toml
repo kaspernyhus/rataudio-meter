@@ -1,6 +1,13 @@
 [package]
 name = "rataudio-meter"
+description = "A ratatui widget for displaying audio meter data in the terminal"
 version = "0.1.0"
 edition = "2021"
+authors = ["Kasper Nyhus <kaspernyhuskaae@gmail.com>"]
+keywords = ["tui", "ratatui", "widget", "audio-meter"]
+repository = "https://github.com/kaspernyhus/rataudio-meter"
+readme = "README.md"
+license = "MIT"
 
 [dependencies]
+ratatui = "0.29.0"
