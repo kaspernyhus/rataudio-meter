@@ -42,6 +42,7 @@ lazy_static! {
     static ref RED_START: f64 = MeterScale::db_to_ratio(RED_START_DB);
     static ref LABEL_60: f64 = MeterScale::db_to_ratio(-60.0);
     static ref LABEL_40: f64 = MeterScale::db_to_ratio(-40.0);
+    static ref LABEL_30: f64 = MeterScale::db_to_ratio(-30.0);
     static ref LABEL_24: f64 = MeterScale::db_to_ratio(-24.0);
     static ref LABEL_12: f64 = MeterScale::db_to_ratio(-12.0);
     static ref LABEL_6: f64 = MeterScale::db_to_ratio(-6.0);
@@ -224,7 +225,7 @@ impl Meter {
             // Render minimal labels for small areas
             self.render_label_offset("-∞", 0.0, label_area, buf, 2, false);
             self.render_label("-60", *LABEL_60, label_area, buf);
-            self.render_label("-24", *LABEL_24, label_area, buf);
+            self.render_label("-30", *LABEL_30, label_area, buf);
             self.render_label("-12", *LABEL_12, label_area, buf);
             self.render_label("0", *LABEL_0, label_area, buf);
         }
