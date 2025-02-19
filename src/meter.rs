@@ -99,14 +99,15 @@ impl Meter {
     ///
     /// # Panics
     ///
-    /// This method will panic if the value of `db` is not between -120.0 and 0.0 inclusively.
+    /// This method will panic if the value of `db` is above 0.0.
     #[must_use = "method moves the value of self and returns the modified value"]
     pub fn db(mut self, db: f64) -> Self {
-        assert!(
-            (-120.0..=0.0).contains(&db),
-            "dB value should be between -120.0 and 0.0 inclusively."
-        );
-        self.ratio = MeterScale::db_to_ratio(db);
+        assert!(db <= 0.0, "dB value cannot be above 0.0.");
+        if db < MIN_DB {
+            self.ratio = 0.0;
+        } else {
+            self.ratio = MeterScale::db_to_ratio(db);
+        }
         self
     }
 
@@ -185,9 +186,15 @@ impl Meter {
                 .set_fg(self.get_color(peak_x, yellow_start, red_start));
         }
 
-        // Render the db label
-        Paragraph::new(format!("{:.1} dB", MeterScale::ratio_to_db(self.ratio)))
-            .render(db_area, buf);
+        // Render the dB label
+        let db_label = MeterScale::ratio_to_db(self.ratio);
+        if db_label > MIN_DB {
+            Paragraph::new(format!("{:.1} dB", db_label)).render(db_area, buf);
+        } else {
+            Paragraph::new("-∞ dB").render(db_area, buf);
+        }
+
+        // Render the scale labels
         self.render_meter_scale(label_area, buf);
     }
 
@@ -270,25 +277,21 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic = "dB value should be between -120.0 and 0.0 inclusively."]
+    #[should_panic = "dB value cannot be above 0.0."]
     fn meter_invalid_db_upper_bound() {
         let _ = Meter::default().db(0.1);
     }
 
     #[test]
     fn meter_db_zero() {
-        let _ = Meter::default().db(0.0);
+        let meter = Meter::default().db(0.0);
+        assert_eq!(meter.ratio, 1.0);
     }
 
     #[test]
-    #[should_panic = "dB value should be between -120.0 and 0.0 inclusively."]
     fn meter_invalid_db_lower_bound() {
-        let _ = Meter::default().db(MIN_DB - 0.1);
-    }
-
-    #[test]
-    fn meter_db_min() {
-        let _ = Meter::default().db(MIN_DB);
+        let meter = Meter::default().db(-800.0);
+        assert_eq!(meter.ratio, 0.0);
     }
 
     #[test]
