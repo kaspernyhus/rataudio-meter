@@ -103,7 +103,7 @@ impl Meter {
     #[must_use = "method moves the value of self and returns the modified value"]
     pub fn db(mut self, db: f64) -> Self {
         assert!(
-            (-120.0..0.0).contains(&db),
+            (-120.0..=0.0).contains(&db),
             "dB value should be between -120.0 and 0.0 inclusively."
         );
         self.ratio = MeterScale::db_to_ratio(db);
@@ -265,4 +265,41 @@ impl Meter {
     }
 }
 
-// Todo: Add tests for the meter widget
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic = "dB value should be between -120.0 and 0.0 inclusively."]
+    fn meter_invalid_db_upper_bound() {
+        let _ = Meter::default().db(0.1);
+    }
+
+    #[test]
+    fn meter_db_zero() {
+        let _ = Meter::default().db(0.0);
+    }
+
+    #[test]
+    #[should_panic = "dB value should be between -120.0 and 0.0 inclusively."]
+    fn meter_invalid_db_lower_bound() {
+        let _ = Meter::default().db(MIN_DB - 0.1);
+    }
+
+    #[test]
+    fn meter_db_min() {
+        let _ = Meter::default().db(MIN_DB);
+    }
+
+    #[test]
+    #[should_panic = "Ratio should be between 0 and 1 inclusively"]
+    fn meter_invalid_ratio_upper_bound() {
+        let _ = Meter::default().ratio(1.1);
+    }
+
+    #[test]
+    #[should_panic = "Ratio should be between 0 and 1 inclusively"]
+    fn meter_invalid_ratio_lower_bound() {
+        let _ = Meter::default().ratio(-0.5);
+    }
+}
