@@ -1,4 +1,4 @@
-//! The [`Meter`] widget is used to display a horizontal audio meter.    
+//! The [`Meter`] widget is used to display a horizontal audio meter.
 use std::time::{Duration, Instant};
 
 use lazy_static::lazy_static;
