@@ -80,14 +80,25 @@ fn draw(frame: &mut Frame, db_level: &[f32], state: &mut MeterState) {
         Block::bordered().border_type(BorderType::Rounded),
         Rect::new(9, 9, 63, 5),
     );
+
+    frame.render_widget(
+        Meter::mono()
+            .show_labels(false)
+            .show_scale(true)
+            .db(MeterInput::Mono(db_level[0])),
+        Rect::new(80, 10, 60, 3),
+    );
+
     frame.render_widget(
         Meter::mono().db(MeterInput::Mono(db_level[0])),
         Rect::new(10, 10, 60, 3),
     );
+
     frame.render_widget(
         Meter::stereo().db(MeterInput::Stereo(db_level[1], db_level[2])),
         Rect::new(10, 16, 60, 5),
     );
+
     frame.render_stateful_widget(
         Meter::mono().db(MeterInput::Mono(db_level[3])),
         Rect::new(10, 24, 60, 3),

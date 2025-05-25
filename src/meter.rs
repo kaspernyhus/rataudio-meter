@@ -84,6 +84,8 @@ lazy_static! {
 pub struct Meter {
     ratio: [f32; 2],
     channels: usize,
+    show_labels: bool,
+    show_scale: bool,
 }
 
 /// Input type for the [`Meter`] widget
@@ -125,6 +127,8 @@ impl Meter {
         Self {
             ratio: [0.0; 2],
             channels: 1,
+            show_labels: true,
+            show_scale: true,
         }
     }
 
@@ -133,12 +137,28 @@ impl Meter {
         Self {
             ratio: [0.0; 2],
             channels: 2,
+            show_labels: true,
+            show_scale: true,
         }
     }
 
     /// Get the number of channels for this [`Meter`].
     pub fn channels(&self) -> usize {
         self.channels
+    }
+
+    /// Show or hide the decibel labels for the [`Meter`].
+    #[must_use = "method moves the value of self and returns the modified value"]
+    pub fn show_labels(mut self, show: bool) -> Self {
+        self.show_labels = show;
+        self
+    }
+
+    /// Show or hide the scale below the [`Meter`].
+    #[must_use = "method moves the value of self and returns the modified value"]
+    pub fn show_scale(mut self, show: bool) -> Self {
+        self.show_scale = show;
+        self
     }
 
     /// Set the value of the [`Meter`] widget in decibels relative to full scale.
@@ -269,12 +289,10 @@ impl Meter {
                     (0.99 - 0.01 * elapsed.as_secs_f32()).clamp(0.1, 0.99);
             }
 
+            // --- METER BAR ---
             let peak_x = meter_area.left()
                 + (f32::from(area.width) * state.peak_hold_ratio[channel]).round() as u16;
-
             let y = meter_area.top() + channel as u16;
-
-            // --- METER BAR ---
             for x in meter_area.left()..end {
                 if x <= meter_area.left() + (f32::from(area.width) * ratio).round() as u16 {
                     buf[(x, y)]
@@ -288,19 +306,24 @@ impl Meter {
                 .set_symbol(symbols::block::SEVEN_EIGHTHS)
                 .set_fg(self.get_color(peak_x, yellow_start, red_start));
 
-            // --- DB LABEL ---
-            let label_y = db_area.top() + channel as u16;
-            let db_label = MeterScale::ratio_to_db(ratio);
-            let text = if db_label > MIN_DB {
-                format!("{:.1} dB", db_label)
-            } else {
-                "-∞ dB".to_string()
-            };
-            Paragraph::new(text).render(Rect::new(db_area.left(), label_y, db_area.width, 1), buf);
+            // --- DB LABELS ---
+            if self.show_labels {
+                let label_y = db_area.top() + channel as u16;
+                let db_label = MeterScale::ratio_to_db(ratio);
+                let text = if db_label > MIN_DB {
+                    format!("{:.1} dB", db_label)
+                } else {
+                    "-∞ dB".to_string()
+                };
+                Paragraph::new(text)
+                    .render(Rect::new(db_area.left(), label_y, db_area.width, 1), buf);
+            }
         }
 
         // --- SCALE LABELS ---
-        self.render_meter_scale(label_area, buf);
+        if self.show_scale {
+            self.render_meter_scale(label_area, buf);
+        }
     }
 
     fn render_meter_scale(&self, label_area: Rect, buf: &mut Buffer) {
