@@ -74,15 +74,22 @@ lazy_static! {
 
 /// A widget to display an audio meter.
 ///
-/// A `Meter` renders a bar filled according to the value given to [`Meter::db`] or
+/// A `Meter` renders a bar filled according to the value given to [`Meter::db`], [`Meter::sample_amplitude`] or
 /// [`Meter::ratio`]. The bar width and height are defined by the [`Rect`] it is
 /// [rendered](Widget::render) in.
 ///
 /// [`Meter`] is also a [`StatefulWidget`], which means you can use it with [`MeterState`] to allow
 /// the meter to hold its peak value for a certain amount of time.
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Meter {
-    ratio: f32,
+    ratio: [f32; 2],
+    channels: usize,
+}
+
+/// Input type for the [`Meter`] widget
+pub enum MeterInput {
+    Mono(f32),
+    Stereo(f32, f32),
 }
 
 /// State of the [`Meter`] widget
@@ -97,36 +104,62 @@ pub struct Meter {
 /// - [`last_peak_time`]: the time when the peak value was last updated
 #[derive(Debug, Clone)]
 pub struct MeterState {
-    pub peak_hold_ratio: f32,
+    pub peak_hold_ratio: [f32; 2],
+    pub last_peak_time: [Instant; 2],
     pub peak_hold_time: Duration,
-    pub last_peak_time: Instant,
 }
 
 impl Default for MeterState {
     fn default() -> Self {
         Self {
-            peak_hold_ratio: 0.0,
+            peak_hold_ratio: [0.0; 2],
+            last_peak_time: [Instant::now(); 2],
             peak_hold_time: Duration::from_secs(1),
-            last_peak_time: Instant::now(),
         }
     }
 }
 
 impl Meter {
-    /// Create a new [`Meter`] widget.
-    pub fn new() -> Self {
-        Self { ratio: 0.0 }
+    /// Create a new mono [`Meter`] widget.
+    pub fn mono() -> Self {
+        Self {
+            ratio: [0.0; 2],
+            channels: 1,
+        }
+    }
+
+    /// Create a new stereo [`Meter`] widget.
+    pub fn stereo() -> Self {
+        Self {
+            ratio: [0.0; 2],
+            channels: 2,
+        }
+    }
+
+    /// Get the number of channels for this [`Meter`].
+    pub fn channels(&self) -> usize {
+        self.channels
     }
 
     /// Set the value of the [`Meter`] widget in decibels relative to full scale.
     ///
     /// This method will saturate values above 0.0.
     #[must_use = "method moves the value of self and returns the modified value"]
-    pub fn db(mut self, dbfs: f32) -> Self {
-        if (MIN_DB..=0.0).contains(&dbfs) {
-            self.ratio = MeterScale::db_to_ratio(dbfs);
-        } else {
-            self.ratio = 0.0;
+    pub fn db(mut self, input: MeterInput) -> Self {
+        match input {
+            MeterInput::Mono(dbfs) => {
+                if (MIN_DB..=0.0).contains(&dbfs) {
+                    self.ratio[0] = MeterScale::db_to_ratio(dbfs);
+                    self.ratio[1] = 0.0;
+                } else {
+                    self.ratio[0] = 0.0;
+                    self.ratio[1] = 0.0;
+                }
+            }
+            MeterInput::Stereo(left_dbfs, right_dbfs) => {
+                self.ratio[0] = MeterScale::db_to_ratio(left_dbfs);
+                self.ratio[1] = MeterScale::db_to_ratio(right_dbfs);
+            }
         }
         self
     }
@@ -137,12 +170,26 @@ impl Meter {
     ///
     /// This method will panic if the value of `sample` is not between 0.0 and 1.0 inclusively.
     #[must_use = "method moves the value of self and returns the modified value"]
-    pub fn sample_amplitude(mut self, sample_amplitude: f32) -> Self {
-        assert!(
-            (0.0..=1.0).contains(&sample_amplitude),
-            "Ratio should be between 0 and 1 inclusively."
-        );
-        self.ratio = MeterScale::sample_to_ratio(sample_amplitude);
+    pub fn sample_amplitude(mut self, input: MeterInput) -> Self {
+        match input {
+            MeterInput::Mono(ampl) => {
+                assert!(
+                    (0.0..=1.0).contains(&ampl),
+                    "Ratio should be between 0 and 1 inclusively."
+                );
+                self.ratio[0] = MeterScale::sample_to_ratio(ampl);
+                self.ratio[1] = 0.0;
+            }
+            MeterInput::Stereo(left_ampl, right_ampl) => {
+                assert!(
+                    (0.0..=1.0).contains(&left_ampl) && (0.0..=1.0).contains(&right_ampl),
+                    "Ratio should be between 0 and 1 inclusively."
+                );
+                self.ratio[0] = MeterScale::sample_to_ratio(left_ampl);
+                self.ratio[1] = MeterScale::sample_to_ratio(right_ampl);
+            }
+        }
+
         self
     }
 
@@ -154,12 +201,25 @@ impl Meter {
     ///
     /// This method will panic if the value of `ratio` is not between 0.0 and 1.0 inclusively.
     #[must_use = "method moves the value of self and returns the modified value"]
-    pub fn ratio(mut self, ratio: f32) -> Self {
-        assert!(
-            (0.0..=1.0).contains(&ratio),
-            "Ratio should be between 0 and 1 inclusively."
-        );
-        self.ratio = ratio;
+    pub fn ratio(mut self, input: MeterInput) -> Self {
+        match input {
+            MeterInput::Mono(ratio) => {
+                assert!(
+                    (0.0..=1.0).contains(&ratio),
+                    "Ratio should be between 0 and 1 inclusively."
+                );
+                self.ratio[0] = ratio;
+                self.ratio[1] = 0.0;
+            }
+            MeterInput::Stereo(left_ratio, right_ratio) => {
+                assert!(
+                    (0.0..=1.0).contains(&left_ratio) && (0.0..=1.0).contains(&right_ratio),
+                    "Ratio should be between 0 and 1 inclusively."
+                );
+                self.ratio[0] = left_ratio;
+                self.ratio[1] = right_ratio;
+            }
+        }
         self
     }
 }
@@ -183,53 +243,63 @@ impl Meter {
             return;
         }
 
-        // Split the area into three parts: db label, meter, and scale label
-        let [db_area, meter_area, label_area] =
-            Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
-                .areas(area);
+        // Each channel gets its own row for the meter and its own db label
+        let [db_area, meter_area, label_area] = Layout::vertical([
+            Constraint::Length(self.channels as u16), // db labels (1 or 2 lines)
+            Constraint::Length(self.channels as u16), // 1 or 2 meters
+            Constraint::Length(1),                    // scale labels
+        ])
+        .areas(area);
 
-        // Compute the start of the yellow and red zones
+        // Compute color zones (same for all channels)
         let yellow_start = area.left() + (area.width as f32 * *YELLOW_START).round() as u16;
         let red_start = area.left() + (area.width as f32 * *RED_START).round() as u16;
         let end = area.left() + area.width;
 
-        // Update the peak hold value
-        let elapsed = state.last_peak_time.elapsed();
-        if self.ratio > state.peak_hold_ratio {
-            state.peak_hold_ratio = self.ratio;
-            state.last_peak_time = Instant::now();
-        } else if elapsed.as_secs() > state.peak_hold_time.as_secs() {
-            state.peak_hold_ratio *= (0.99 - 0.01 * elapsed.as_secs_f32()).clamp(0.1, 0.99);
-        }
+        for channel in 0..self.channels {
+            let ratio = self.ratio[channel];
 
-        let peak_x =
-            meter_area.left() + (f32::from(area.width) * state.peak_hold_ratio).round() as u16;
+            // --- PEAK HOLD ---
+            let elapsed = state.last_peak_time[channel].elapsed();
+            if ratio > state.peak_hold_ratio[channel] {
+                state.peak_hold_ratio[channel] = ratio;
+                state.last_peak_time[channel] = Instant::now();
+            } else if elapsed.as_secs_f32() > state.peak_hold_time.as_secs_f32() {
+                state.peak_hold_ratio[channel] *=
+                    (0.99 - 0.01 * elapsed.as_secs_f32()).clamp(0.1, 0.99);
+            }
 
-        // Render the meter
-        for y in meter_area.top()..meter_area.bottom() {
+            let peak_x = meter_area.left()
+                + (f32::from(area.width) * state.peak_hold_ratio[channel]).round() as u16;
+
+            let y = meter_area.top() + channel as u16;
+
+            // --- METER BAR ---
             for x in meter_area.left()..end {
-                if x <= meter_area.left() + (f32::from(area.width) * self.ratio).round() as u16 {
+                if x <= meter_area.left() + (f32::from(area.width) * ratio).round() as u16 {
                     buf[(x, y)]
                         .set_symbol(symbols::block::SEVEN_EIGHTHS)
                         .set_fg(self.get_color(x, yellow_start, red_start));
                 }
             }
 
-            // Render the peak hold value
+            // --- PEAK MARKER ---
             buf[(peak_x, y)]
                 .set_symbol(symbols::block::SEVEN_EIGHTHS)
                 .set_fg(self.get_color(peak_x, yellow_start, red_start));
+
+            // --- DB LABEL ---
+            let label_y = db_area.top() + channel as u16;
+            let db_label = MeterScale::ratio_to_db(ratio);
+            let text = if db_label > MIN_DB {
+                format!("{:.1} dB", db_label)
+            } else {
+                "-∞ dB".to_string()
+            };
+            Paragraph::new(text).render(Rect::new(db_area.left(), label_y, db_area.width, 1), buf);
         }
 
-        // Render the dB label
-        let db_label = MeterScale::ratio_to_db(self.ratio);
-        if db_label > MIN_DB {
-            Paragraph::new(format!("{:.1} dB", db_label)).render(db_area, buf);
-        } else {
-            Paragraph::new("-∞ dB").render(db_area, buf);
-        }
-
-        // Render the scale labels
+        // --- SCALE LABELS ---
         self.render_meter_scale(label_area, buf);
     }
 
@@ -287,7 +357,7 @@ impl Meter {
 
         Paragraph::new(text).render(
             Rect {
-                x: x,
+                x,
                 y: label_area.top(),
                 width: label_width,
                 height: 1,
@@ -380,31 +450,38 @@ mod tests {
 
     #[test]
     fn meter_invalid_db_upper_bound() {
-        let meter = Meter::default().db(0.1);
-        assert_eq!(meter.ratio, 0.0)
+        let meter = Meter::mono().db(MeterInput::Mono(0.1));
+        assert_eq!(meter.ratio[0], 0.0)
     }
 
     #[test]
     fn meter_db_zero() {
-        let meter = Meter::default().db(0.0);
-        assert_eq!(meter.ratio, 1.0);
+        let meter = Meter::mono().db(MeterInput::Mono(0.0));
+        assert_eq!(meter.ratio[0], 1.0)
     }
 
     #[test]
-    fn meter_invalid_db_lower_bound() {
-        let meter = Meter::default().db(-800.0);
-        assert_eq!(meter.ratio, 0.0);
+    fn meter_db_lower_bound() {
+        let meter = Meter::mono().db(MeterInput::Mono(-800.0));
+        assert_eq!(meter.ratio[0], 0.0);
+    }
+
+    #[test]
+    fn meter_stereo_db() {
+        let meter = Meter::stereo().db(MeterInput::Stereo(0.0, 0.0));
+        assert_eq!(meter.ratio[0], 1.0);
+        assert_eq!(meter.ratio[1], 1.0);
     }
 
     #[test]
     #[should_panic = "Ratio should be between 0 and 1 inclusively"]
     fn meter_invalid_ratio_upper_bound() {
-        let _ = Meter::default().ratio(1.1);
+        let _ = Meter::mono().ratio(MeterInput::Mono(1.1));
     }
 
     #[test]
     #[should_panic = "Ratio should be between 0 and 1 inclusively"]
     fn meter_invalid_ratio_lower_bound() {
-        let _ = Meter::default().ratio(-0.5);
+        let _ = Meter::mono().ratio(MeterInput::Mono(-0.5));
     }
 }

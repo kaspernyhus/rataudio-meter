@@ -1,3 +1,3 @@
 mod meter;
 
-pub use meter::{Meter, MeterState};
+pub use meter::{Meter, MeterInput, MeterState};
