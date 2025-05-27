@@ -4,8 +4,10 @@ description = "A ratatui widget for displaying audio meter data in the terminal"
 version = "0.1.0"
 edition = "2021"
 authors = ["Kasper Nyhus <kaspernyhuskaae@gmail.com>"]
+homepage = "https://github.com/kaspernyhus/rataudio-meter"
+repository = "https://github.com/kaspernyhus/rataudio-meter.git"
 keywords = ["tui", "ratatui", "widget", "audio-meter"]
-repository = "https://github.com/kaspernyhus/rataudio-meter"
+categories = ["command-line-utilities", "multimedia::audio"]
 readme = "README.md"
 license = "MIT"
 
