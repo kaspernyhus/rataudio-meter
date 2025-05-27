@@ -30,17 +30,22 @@ fn generate_levels(steps: usize) -> Vec<f32> {
 }
 
 fn run(mut terminal: DefaultTerminal) -> Result<()> {
-    const UPDATE_INTERVAL: Duration = Duration::from_millis(10);
+    const UPDATE_INTERVAL: Duration = Duration::from_millis(20);
     let mut last_time = std::time::Instant::now();
     let mut db_level = [-120.0; 4];
 
-    let levels = generate_levels(100);
+    let levels = generate_levels(200);
+    // let levels = [
+    //     -800.0, -120.0, -60.0, -40.0, -30.0, -24.0, -12.0, -6.0, -3.0, 0.0, 0.1, 0.0, -3.0, -6.0,
+    //     -12.0, -24.0, -30.0, -40.0, -60.0,
+    // ];
+
     let mut index_1 = 0;
     let mut index_2 = 10;
     let mut index_3 = 20;
-    let mut index_4 = 50;
+    let mut index_4 = 30;
 
-    let mut state = MeterState::default();
+    let mut states = [MeterState::default(), MeterState::default()];
 
     loop {
         if last_time.elapsed() >= UPDATE_INTERVAL {
@@ -53,19 +58,19 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
             index_1 = (index_1 + 1) % levels.len();
             index_2 = (index_2 + 2) % levels.len();
             index_3 = (index_3 + 3) % levels.len();
-            index_4 = (index_4 + 1) % levels.len();
+            index_4 = (index_4 + 4) % levels.len();
             last_time = std::time::Instant::now();
         }
 
-        terminal.draw(|frame| draw(frame, &db_level, &mut state))?;
+        terminal.draw(|frame| draw(frame, &db_level, &mut states))?;
         if handle_input()? == Command::Quit {
             break Ok(());
         }
     }
 }
 
-fn draw(frame: &mut Frame, db_level: &[f32], state: &mut MeterState) {
-    let area = Rect::new(0, 1, frame.area().width, 3);
+fn draw(frame: &mut Frame, db_level: &[f32], states: &mut [MeterState]) {
+    let title_area = Rect::new(0, 1, frame.area().width, 3);
     let p = Paragraph::new("Rataudio Meter Demo")
         .style(Style::default().fg(Color::Yellow))
         .block(
@@ -74,35 +79,53 @@ fn draw(frame: &mut Frame, db_level: &[f32], state: &mut MeterState) {
                 .border_type(BorderType::Rounded),
         )
         .alignment(Alignment::Center);
-    frame.render_widget(p, area);
+    frame.render_widget(p, title_area);
+
+    let m1 = Paragraph::new("Mono meter");
+    frame.render_widget(m1, Rect::new(1, 6, 40, 1));
 
     frame.render_widget(
-        Block::bordered().border_type(BorderType::Rounded),
-        Rect::new(9, 9, 63, 5),
+        Meter::mono().db(MeterInput::Mono(db_level[0])),
+        Rect::new(1, 7, 80, 5),
     );
+
+    let m2 = Paragraph::new("Mono meter - no labels, no scale");
+    frame.render_widget(m2, Rect::new(1, 12, 40, 1));
 
     frame.render_widget(
         Meter::mono()
             .show_labels(false)
-            .show_scale(true)
+            .show_scale(false)
             .db(MeterInput::Mono(db_level[0])),
-        Rect::new(80, 10, 60, 3),
+        Rect::new(1, 13, 22, 3),
     );
 
     frame.render_widget(
-        Meter::mono().db(MeterInput::Mono(db_level[0])),
-        Rect::new(10, 10, 60, 3),
+        Meter::stereo()
+            .block(
+                Block::default()
+                    .title("Stereo Meter - no labels")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
+            .show_labels(false)
+            .db(MeterInput::Stereo(db_level[1], db_level[2])),
+        Rect::new(0, 16, 60, 5),
     );
 
-    frame.render_widget(
-        Meter::stereo().db(MeterInput::Stereo(db_level[1], db_level[2])),
-        Rect::new(10, 16, 60, 5),
-    );
+    let m3 = Paragraph::new("Meters with state - peak hold");
+    frame.render_widget(m3, Rect::new(1, 24, 40, 1));
 
     frame.render_stateful_widget(
         Meter::mono().db(MeterInput::Mono(db_level[3])),
-        Rect::new(10, 24, 60, 3),
-        state,
+        Rect::new(1, 25, 40, 3),
+        &mut states[0],
+    );
+
+    frame.render_stateful_widget(
+        Meter::stereo().db(MeterInput::Stereo(db_level[1], db_level[2])),
+        Rect::new(1, 30, 60, 5),
+        &mut states[1],
     );
 }
 
