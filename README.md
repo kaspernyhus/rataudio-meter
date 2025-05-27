@@ -1,13 +1,10 @@
 # rataudio-meter
 
-An adapted version of the [ratatui](https://ratatui.rs/) `Gauge` `Widget` for displaying audio meter data in the terminal.
+An adapted version of the [ratatui](https://ratatui.rs/) `Gauge` `Widget` for displaying audio meter data in the terminal partly inspired by [Meter](https://github.com/cgbur/meter?tab=readme-ov-file).
 
-```
--2.0 dB
-█████████████████████████████████████████████████████████
--inf          -60         -40        -24        -12  -6 -3  0
-```
 
 ```
 cargo run --example demo
 ```
+
+![example](examples/stereo-meter.gif)
